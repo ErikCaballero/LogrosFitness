@@ -224,31 +224,37 @@
     </div>
   </div>
 
-  <script>
-    // ==========================================================
-    // ⚙️ CONFIGURACIÓN DE SUPABASE
-    // ==========================================================
-    const SUPABASE_URL = "https://qmeilciuomeynayroxiw.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtZWlsY2l1b21leW5heXJveGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MzM3NDEsImV4cCI6MjEwMjIwOTc0MX0.3VVRKgewE4-qpg3F4LaIvr3KyiRNfWwGtXT3hVYLdEA";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+<script>
+  // ==========================================================
+  // ⚙️ CONFIGURACIÓN DE SUPABASE (Declarada UNA sola vez)
+  // ==========================================================
+  const SUPABASE_URL = "https://qmeilciuomeynayroxiw.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtZWlsY2l1b21leW5heXJveGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MzM3NDEsImV4cCI6MjEwMjIwOTc0MX0.3VVRKgewE4-qpg3F4LaIvr3KyiRNfWwGtXT3hVYLdEA";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let usuarioSesion = null;
-    let logrosCargados = []; // Guarda temporalmente los logros para editar sin fallos de comillas
+  let usuarioSesion = null;
+  let logrosCargados = [];
 
-    // --- INICIALIZACIÓN ---
-    window.onload = () => {
-      const sesion = localStorage.getItem('gym_user');
-      if (sesion) {
-        usuarioSesion = JSON.parse(sesion);
-        mostrarApp();
-      }
-    };
+  // --- INICIALIZACIÓN ---
+  window.onload = () => {
+    const sesion = localStorage.getItem('gym_user');
+    if (sesion) {
+      usuarioSesion = JSON.parse(sesion);
+      mostrarApp();
+    }
+  };
 
-    // --- LOGIN & LOGOUT ---
-    async function login() {
-      const name = document.getElementById('login-user').value.trim();
-      const pass = document.getElementById('login-pass').value.trim();
+  // --- LOGIN ---
+  async function login() {
+    const name = document.getElementById('login-user').value.trim();
+    const pass = document.getElementById('login-pass').value.trim();
 
+    if (!name || !pass) {
+      alert('Por favor, rellena usuario y contraseña.');
+      return;
+    }
+
+    try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -256,210 +262,218 @@
         .eq('password', pass)
         .maybeSingle();
 
-      if (error || !data) {
-        alert('Usuario o contraseña incorrectos');
+      if (error) {
+        console.error('Error de Supabase:', error);
+        alert('Error en la base de datos: ' + error.message);
+        return;
+      }
+
+      if (!data) {
+        alert('Usuario o contraseña incorrectos.');
         return;
       }
 
       usuarioSesion = data;
       localStorage.setItem('gym_user', JSON.stringify(data));
       mostrarApp();
+
+    } catch (err) {
+      console.error('Error inesperado:', err);
+      alert('Error de conexión con la base de datos.');
     }
+  }
 
-    function logout() {
-      localStorage.removeItem('gym_user');
-      location.reload();
-    }
+  function logout() {
+    localStorage.removeItem('gym_user');
+    location.reload();
+  }
 
-    // --- CARGA DE LA PANTALLA ---
-    async function mostrarApp() {
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('app-screen').classList.remove('hidden');
-      document.getElementById('welcome-msg').innerText = `Hola, ${usuarioSesion.nombre}`;
-      document.getElementById('role-badge').innerText = `Rol: ${(usuarioSesion.role || 'usuario').toUpperCase()}`;
+  // --- PANTALLA PRINCIPAL ---
+  async function mostrarApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-screen').classList.remove('hidden');
+    document.getElementById('welcome-msg').innerText = `Hola, ${usuarioSesion.nombre}`;
+    document.getElementById('role-badge').innerText = `Rol: ${(usuarioSesion.role || 'usuario').toUpperCase()}`;
 
-      await cargarSelectorUsuarios();
-      cargarLogros();
-    }
+    await cargarSelectorUsuarios();
+    cargarLogros();
+  }
 
-    // --- CARGAR SELECTOR DE VISTAS (AMIGOS / ADMIN) ---
-    async function cargarSelectorUsuarios() {
-      const select = document.getElementById('filter-user');
-      select.innerHTML = '<option value="mis_logros">👤 Mis Logros</option>';
+  async function cargarSelectorUsuarios() {
+    const select = document.getElementById('filter-user');
+    select.innerHTML = '<option value="mis_logros">👤 Mis Logros</option>';
 
-      if (usuarioSesion.role === 'admin') {
-        select.innerHTML += '<option value="todos">👥 Todos los Usuarios (A-Z)</option>';
-        const { data: todos } = await supabase.from('profiles').select('*').order('nombre', { ascending: true });
-        todos?.forEach(u => {
-          if(u.id !== usuarioSesion.id) {
-            select.innerHTML += `<option value="${u.id}">👤 ${u.nombre}</option>`;
-          }
-        });
-      } else {
-        const { data: misAmigos } = await supabase
-          .from('amigos')
-          .select('amigo_id, profiles!amigos_amigo_id_fkey(nombre)')
-          .eq('user_id', usuarioSesion.id);
+    if (usuarioSesion.role === 'admin') {
+      select.innerHTML += '<option value="todos">👥 Todos los Usuarios (A-Z)</option>';
+      const { data: todos } = await supabase.from('profiles').select('*').order('nombre', { ascending: true });
+      todos?.forEach(u => {
+        if(u.id !== usuarioSesion.id) {
+          select.innerHTML += `<option value="${u.id}">👤 ${u.nombre}</option>`;
+        }
+      });
+    } else {
+      const { data: misAmigos } = await supabase
+        .from('amigos')
+        .select('amigo_id, profiles!amigos_amigo_id_fkey(nombre)')
+        .eq('user_id', usuarioSesion.id);
 
-        misAmigos?.forEach(a => {
-          if (a.profiles) {
-            select.innerHTML += `<option value="${a.amigo_id}">👥 Amigo: ${a.profiles.nombre}</option>`;
-          }
-        });
-      }
-    }
-
-    // --- CONSULTA Y FILTRADO DE LOGROS ---
-    async function cargarLogros() {
-      const userFilter = document.getElementById('filter-user').value;
-      const yearFilter = document.getElementById('filter-year').value;
-      const catFilter = document.getElementById('filter-category').value;
-      const searchFilter = document.getElementById('filter-search').value.toLowerCase();
-
-      let query = supabase.from('logros').select('*, profiles(nombre)');
-
-      if (userFilter === 'mis_logros') {
-        query = query.eq('user_id', usuarioSesion.id);
-      } else if (userFilter !== 'todos') {
-        query = query.eq('user_id', userFilter);
-      }
-
-      if (yearFilter !== 'todos') {
-        query = query.eq('anio', parseInt(yearFilter));
-      }
-
-      if (catFilter !== 'todas') {
-        query = query.eq('categoria', catFilter);
-      }
-
-      const { data: logros, error } = await query.order('anio', { ascending: false }).order('created_at', { ascending: false });
-
-      if (error) {
-        console.error(error);
-        return;
-      }
-
-      logrosCargados = logros || [];
-      const container = document.getElementById('logros-container');
-      container.innerHTML = '';
-
-      const filtrados = logrosCargados.filter(l => (l.nombre || '').toLowerCase().includes(searchFilter));
-
-      if (filtrados.length === 0) {
-        container.innerHTML = '<p style="color: var(--muted); text-align: center;">No hay logros registrados con estos filtros.</p>';
-        return;
-      }
-
-      filtrados.forEach(l => {
-        const esMioOAdmin = (l.user_id === usuarioSesion.id) || (usuarioSesion.role === 'admin');
-        container.innerHTML += `
-          <div class="achievement-card">
-            <div>
-              <span class="badge">${l.categoria}</span>
-              <h3 style="margin: 8px 0 4px 0;">${l.nombre}</h3>
-              <div class="date-tag">📅 Año: ${l.anio} ${l.fecha ? '| Fecha: ' + l.fecha : ''} | 👤 ${l.profiles ? l.profiles.nombre : 'Usuario'}</div>
-              ${l.descripcion ? `<p style="margin-top: 8px; color: #cbd5e1;">${l.descripcion}</p>` : ''}
-            </div>
-            ${esMioOAdmin ? `
-              <div>
-                <button onclick="prepararEdicion('${l.id}')" class="btn-secondary" style="width:auto; padding:5px 10px;">✏️</button>
-                <button onclick="borrarLogro('${l.id}')" class="btn-danger" style="width:auto; padding:5px 10px;">🗑️</button>
-              </div>
-            ` : ''}
-          </div>
-        `;
+      misAmigos?.forEach(a => {
+        if (a.profiles) {
+          select.innerHTML += `<option value="${a.amigo_id}">👥 Amigo: ${a.profiles.nombre}</option>`;
+        }
       });
     }
+  }
 
-    // --- AÑADIR / EDITAR LOGROS ---
-    function abrirModalLogro() {
-      document.getElementById('logro-id').value = '';
-      document.getElementById('logro-nombre').value = '';
-      document.getElementById('logro-categoria').value = 'Fuerza';
-      document.getElementById('logro-anio').value = new Date().getFullYear();
-      document.getElementById('logro-fecha').value = '';
-      document.getElementById('logro-descripcion').value = '';
-      document.getElementById('modal-title').innerText = 'Añadir Logro';
-      document.getElementById('modal-logro').classList.remove('hidden');
+  async function cargarLogros() {
+    const userFilter = document.getElementById('filter-user').value;
+    const yearFilter = document.getElementById('filter-year').value;
+    const catFilter = document.getElementById('filter-category').value;
+    const searchFilter = document.getElementById('filter-search').value.toLowerCase();
+
+    let query = supabase.from('logros').select('*, profiles(nombre)');
+
+    if (userFilter === 'mis_logros') {
+      query = query.eq('user_id', usuarioSesion.id);
+    } else if (userFilter !== 'todos') {
+      query = query.eq('user_id', userFilter);
     }
 
-    function prepararEdicion(id) {
-      const logro = logrosCargados.find(item => item.id === id);
-      if (!logro) return;
-
-      document.getElementById('logro-id').value = logro.id;
-      document.getElementById('logro-nombre').value = logro.nombre || '';
-      document.getElementById('logro-categoria').value = logro.categoria;
-      document.getElementById('logro-anio').value = logro.anio;
-      document.getElementById('logro-fecha').value = logro.fecha || '';
-      document.getElementById('logro-descripcion').value = logro.descripcion || '';
-      document.getElementById('modal-title').innerText = 'Editar Logro';
-      document.getElementById('modal-logro').classList.remove('hidden');
+    if (yearFilter !== 'todos') {
+      query = query.eq('anio', parseInt(yearFilter));
     }
 
-    function cerrarModalLogro() { document.getElementById('modal-logro').classList.add('hidden'); }
+    if (catFilter !== 'todas') {
+      query = query.eq('categoria', catFilter);
+    }
 
-    async function guardarLogro() {
-      const id = document.getElementById('logro-id').value;
-      const payload = {
-        nombre: document.getElementById('logro-nombre').value,
-        categoria: document.getElementById('logro-categoria').value,
-        anio: parseInt(document.getElementById('logro-anio').value),
-        fecha: document.getElementById('logro-fecha').value || null,
-        descripcion: document.getElementById('logro-descripcion').value
-      };
+    const { data: logros, error } = await query.order('anio', { ascending: false }).order('created_at', { ascending: false });
 
-      if (!payload.nombre) return alert('Pon un nombre al logro');
+    if (error) {
+      console.error(error);
+      return;
+    }
 
-      if (id) {
-        await supabase.from('logros').update(payload).eq('id', id);
-      } else {
-        payload.user_id = usuarioSesion.id; // Asigna creador solo en inserciones nuevas
-        await supabase.from('logros').insert([payload]);
-      }
+    logrosCargados = logros || [];
+    const container = document.getElementById('logros-container');
+    container.innerHTML = '';
 
-      cerrarModalLogro();
+    const filtrados = logrosCargados.filter(l => (l.nombre || '').toLowerCase().includes(searchFilter));
+
+    if (filtrados.length === 0) {
+      container.innerHTML = '<p style="color: var(--muted); text-align: center;">No hay logros registrados con estos filtros.</p>';
+      return;
+    }
+
+    filtrados.forEach(l => {
+      const esMioOAdmin = (l.user_id === usuarioSesion.id) || (usuarioSesion.role === 'admin');
+      container.innerHTML += `
+        <div class="achievement-card">
+          <div>
+            <span class="badge">${l.categoria}</span>
+            <h3 style="margin: 8px 0 4px 0;">${l.nombre}</h3>
+            <div class="date-tag">📅 Año: ${l.anio} ${l.fecha ? '| Fecha: ' + l.fecha : ''} | 👤 ${l.profiles ? l.profiles.nombre : 'Usuario'}</div>
+            ${l.descripcion ? `<p style="margin-top: 8px; color: #cbd5e1;">${l.descripcion}</p>` : ''}
+          </div>
+          ${esMioOAdmin ? `
+            <div>
+              <button onclick="prepararEdicion('${l.id}')" class="btn-secondary" style="width:auto; padding:5px 10px;">✏️</button>
+              <button onclick="borrarLogro('${l.id}')" class="btn-danger" style="width:auto; padding:5px 10px;">🗑️</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    });
+  }
+
+  function abrirModalLogro() {
+    document.getElementById('logro-id').value = '';
+    document.getElementById('logro-nombre').value = '';
+    document.getElementById('logro-categoria').value = 'Fuerza';
+    document.getElementById('logro-anio').value = new Date().getFullYear();
+    document.getElementById('logro-fecha').value = '';
+    document.getElementById('logro-descripcion').value = '';
+    document.getElementById('modal-title').innerText = 'Añadir Logro';
+    document.getElementById('modal-logro').classList.remove('hidden');
+  }
+
+  function prepararEdicion(id) {
+    const logro = logrosCargados.find(item => item.id === id);
+    if (!logro) return;
+
+    document.getElementById('logro-id').value = logro.id;
+    document.getElementById('logro-nombre').value = logro.nombre || '';
+    document.getElementById('logro-categoria').value = logro.categoria;
+    document.getElementById('logro-anio').value = logro.anio;
+    document.getElementById('logro-fecha').value = logro.fecha || '';
+    document.getElementById('logro-descripcion').value = logro.descripcion || '';
+    document.getElementById('modal-title').innerText = 'Editar Logro';
+    document.getElementById('modal-logro').classList.remove('hidden');
+  }
+
+  function cerrarModalLogro() { document.getElementById('modal-logro').classList.add('hidden'); }
+
+  async function guardarLogro() {
+    const id = document.getElementById('logro-id').value;
+    const payload = {
+      nombre: document.getElementById('logro-nombre').value,
+      categoria: document.getElementById('logro-categoria').value,
+      anio: parseInt(document.getElementById('logro-anio').value),
+      fecha: document.getElementById('logro-fecha').value || null,
+      descripcion: document.getElementById('logro-descripcion').value
+    };
+
+    if (!payload.nombre) return alert('Pon un nombre al logro');
+
+    if (id) {
+      await supabase.from('logros').update(payload).eq('id', id);
+    } else {
+      payload.user_id = usuarioSesion.id;
+      await supabase.from('logros').insert([payload]);
+    }
+
+    cerrarModalLogro();
+    cargarLogros();
+  }
+
+  async function borrarLogro(id) {
+    if (confirm('¿Seguro que quieres borrar este logro?')) {
+      await supabase.from('logros').delete().eq('id', id);
       cargarLogros();
     }
+  }
 
-    async function borrarLogro(id) {
-      if (confirm('¿Seguro que quieres borrar este logro?')) {
-        await supabase.from('logros').delete().eq('id', id);
-        cargarLogros();
-      }
+  function abrirModalAmigo() { document.getElementById('modal-amigo').classList.remove('hidden'); }
+  function cerrarModalAmigo() { document.getElementById('modal-amigo').classList.add('hidden'); }
+
+  async function agregarAmigo() {
+    const nombreAmigo = document.getElementById('amigo-nombre').value.trim();
+    
+    const { data: usuarioBusqueda } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('nombre', nombreAmigo)
+      .maybeSingle();
+
+    if (!usuarioBusqueda) {
+      alert('No se ha encontrado a ningún usuario con ese nombre.');
+      return;
     }
 
-    // --- SISTEMA DE AMIGOS ---
-    function abrirModalAmigo() { document.getElementById('modal-amigo').classList.remove('hidden'); }
-    function cerrarModalAmigo() { document.getElementById('modal-amigo').classList.add('hidden'); }
+    const { error } = await supabase.from('amigos').insert([{
+      user_id: usuarioSesion.id,
+      amigo_id: usuarioBusqueda.id
+    }]);
 
-    async function agregarAmigo() {
-      const nombreAmigo = document.getElementById('amigo-nombre').value.trim();
-      
-      const { data: usuarioBusqueda } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('nombre', nombreAmigo)
-        .maybeSingle();
-
-      if (!usuarioBusqueda) {
-        alert('No se ha encontrado a ningún usuario con ese nombre.');
-        return;
-      }
-
-      const { error } = await supabase.from('amigos').insert([{
-        user_id: usuarioSesion.id,
-        amigo_id: usuarioBusqueda.id
-      }]);
-
-      if (error) {
-        alert('Ese usuario ya está en tu lista de amigos.');
-      } else {
-        alert('¡Amigo añadido con éxito!');
-        cerrarModalAmigo();
-        await cargarSelectorUsuarios();
-      }
+    if (error) {
+      alert('Ese usuario ya está en tu lista de amigos.');
+    } else {
+      alert('¡Amigo añadido con éxito!');
+      cerrarModalAmigo();
+      await cargarSelectorUsuarios();
     }
-  </script>
+  }
+</script>
+  
 </body>
 </html>
