@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gym Achievements</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --danger: #ef4444;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .hidden { display: none !important; }
+    
+    /* Login Form */
+    .login-box {
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 360px;
+      margin: 80px auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    button {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+    }
+    button:hover { opacity: 0.9; }
+    .btn-secondary { background: #475569; color: var(--text); }
+    .btn-danger { background: var(--danger); color: white; }
+
+    /* Header & Navbar */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 15px;
+    }
+
+    /* Filters Bar */
+    .filter-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filter-bar input, .filter-bar select { margin: 0; }
+
+    /* Achievements List */
+    .achievement-card {
+      background: var(--card-bg);
+      border-left: 4px solid var(--accent);
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .badge {
+      background: #0369a1;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+    .date-tag { color: var(--muted); font-size: 0.85em; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal {
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 450px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PANTALLA DE LOGIN -->
+  <div id="login-screen" class="container">
+    <div class="login-box">
+      <h2>🏆 Gym Logros</h2>
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="Ej: Erik">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="***">
+      <button onclick="login()">Entrar</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA PRINCIPAL -->
+  <div id="app-screen" class="container hidden">
+    <header>
+      <div>
+        <h2 id="welcome-msg" style="margin:0;">Hola</h2>
+        <span id="role-badge" style="color:var(--muted); font-size:0.85em;"></span>
+      </div>
+      <div>
+        <button onclick="abrirModalAmigo()" class="btn-secondary" style="width:auto;">👥 + Amigo</button>
+        <button onclick="logout()" class="btn-danger" style="width:auto;">Salir</button>
+      </div>
+    </header>
+
+    <!-- BARRA DE FILTROS -->
+    <div class="filter-bar">
+      <div>
+        <label style="font-size: 0.8em; color: var(--muted);">Ver de:</label>
+        <select id="filter-user" onchange="cargarLogros()">
+          <option value="mis_logros">👤 Mis Logros</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 0.8em; color: var(--muted);">Año:</label>
+        <select id="filter-year" onchange="cargarLogros()">
+          <option value="todos">Todos los años</option>
+          <option value="2026" selected>2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 0.8em; color: var(--muted);">Categoría:</label>
+        <select id="filter-category" onchange="cargarLogros()">
+          <option value="todas">Todas</option>
+          <option value="Fuerza">🏋️ Fuerza</option>
+          <option value="Cardio">🏃 Cardio</option>
+          <option value="Calistenia">🧘 Calistenia</option>
+          <option value="Hitos Generales">🏆 Hitos Generales</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 0.8em; color: var(--muted);">Buscar:</label>
+        <input type="text" id="filter-search" placeholder="Ej: Press banca..." oninput="cargarLogros()">
+      </div>
+    </div>
+
+    <!-- BOTÓN DE AÑADIR -->
+    <button onclick="abrirModalLogro()" style="margin-bottom: 20px;">+ Añadir Logro</button>
+
+    <!-- LISTA DE LOGROS -->
+    <div id="logros-container"></div>
+  </div>
+
+  <!-- MODAL: CREAR/EDITAR LOGRO -->
+  <div id="modal-logro" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modal-title">Añadir Logro</h3>
+      <input type="hidden" id="logro-id">
+      
+      <label>Nombre / Ejercicio</label>
+      <input type="text" id="logro-nombre" placeholder="Ej: Press de banca 100kg">
+
+      <label>Categoría</label>
+      <select id="logro-categoria">
+        <option value="Fuerza">🏋️ Fuerza</option>
+        <option value="Cardio">🏃 Cardio</option>
+        <option value="Calistenia">🧘 Calistenia</option>
+        <option value="Hitos Generales">🏆 Hitos Generales</option>
+      </select>
+
+      <label>Año</label>
+      <input type="number" id="logro-anio" value="2026">
+
+      <label>Fecha Exacta (Opcional)</label>
+      <input type="date" id="logro-fecha">
+
+      <label>Notas / Descripción</label>
+      <textarea id="logro-descripcion" placeholder="Ej: 4 repeticiones limpias"></textarea>
+
+      <button onclick="guardarLogro()">Guardar Logro</button>
+      <button onclick="cerrarModalLogro()" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: AÑADIR AMIGO -->
+  <div id="modal-amigo" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Añadir Amigo</h3>
+      <label>Nombre de Usuario exacto</label>
+      <input type="text" id="amigo-nombre" placeholder="Ej: Paco">
+      <button onclick="agregarAmigo()">Guardar Amigo</button>
+      <button onclick="cerrarModalAmigo()" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================================
+    // ⚙️ CONFIGURACIÓN DE SUPABASE (Reemplaza con tus llaves)
+    // ==========================================================
+    const SUPABASE_URL = "https://TU_PROYECTO.supabase.co";
+    const SUPABASE_KEY = "TU_LLAVE_ANON_KEY";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let usuarioSesion = null;
+
+    // --- INICIALIZACIÓN ---
+    window.onload = () => {
+      const sesion = localStorage.getItem('gym_user');
+      if (sesion) {
+        usuarioSesion = JSON.parse(sesion);
+        mostrarApp();
+      }
+    };
+
+    // --- LOGIN & LOGOUT ---
+    async function login() {
+      const name = document.getElementById('login-user').value.trim();
+      const pass = document.getElementById('login-pass').value.trim();
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('nombre', name)
+        .eq('password', pass)
+        .maybeSingle();
+
+      if (error || !data) {
+        alert('Usuario o contraseña incorrectos');
+        return;
+      }
+
+      usuarioSesion = data;
+      localStorage.setItem('gym_user', JSON.stringify(data));
+      mostrarApp();
+    }
+
+    function logout() {
+      localStorage.removeItem('gym_user');
+      location.reload();
+    }
+
+    // --- CARGA DE LA PANTALLA ---
+    async function mostrarApp() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app-screen').classList.remove('hidden');
+      document.getElementById('welcome-msg').innerText = `Hola, ${usuarioSesion.nombre}`;
+      document.getElementById('role-badge').innerText = `Rol: ${usuarioSesion.role.toUpperCase()}`;
+
+      await cargarSelectorUsuarios();
+      cargarLogros();
+    }
+
+    // --- CARGAR SELECTOR DE VISTAS (AMIGOS / ADMIN) ---
+    async function cargarSelectorUsuarios() {
+      const select = document.getElementById('filter-user');
+      select.innerHTML = '<option value="mis_logros">👤 Mis Logros</option>';
+
+      if (usuarioSesion.role === 'admin') {
+        // El Admin ve la opción de "Todos" y todos los perfiles A-Z
+        select.innerHTML += '<option value="todos">👥 Todos los Usuarios (A-Z)</option>';
+        const { data: todos } = await supabase.from('profiles').select('*').order('nombre', { ascending: true });
+        todos?.forEach(u => {
+          if(u.id !== usuarioSesion.id) {
+            select.innerHTML += `<option value="${u.id}">👤 ${u.nombre}</option>`;
+          }
+        });
+      } else {
+        // Usuario Normal: Carga su lista de amigos
+        const { data: misAmigos } = await supabase
+          .from('amigos')
+          .select('amigo_id, profiles!amigos_amigo_id_fkey(nombre)')
+          .eq('user_id', usuarioSesion.id);
+
+        misAmigos?.forEach(a => {
+          select.innerHTML += `<option value="${a.amigo_id}">👥 Amigo: ${a.profiles.nombre}</option>`;
+        });
+      }
+    }
+
+    // --- CONSULTA Y FILTRADO DE LOGROS ---
+    async function cargarLogros() {
+      const userFilter = document.getElementById('filter-user').value;
+      const yearFilter = document.getElementById('filter-year').value;
+      const catFilter = document.getElementById('filter-category').value;
+      const searchFilter = document.getElementById('filter-search').value.toLowerCase();
+
+      let query = supabase.from('logros').select('*, profiles(nombre)');
+
+      // Filtro por Usuario
+      if (userFilter === 'mis_logros') {
+        query = query.eq('user_id', usuarioSesion.id);
+      } else if (userFilter !== 'todos') {
+        query = query.eq('user_id', userFilter);
+      }
+
+      // Filtro por Año
+      if (yearFilter !== 'todos') {
+        query = query.eq('anio', parseInt(yearFilter));
+      }
+
+      // Filtro por Categoría
+      if (catFilter !== 'todas') {
+        query = query.eq('categoria', catFilter);
+      }
+
+      const { data: logros, error } = await query.order('anio', { ascending: false }).order('created_at', { ascending: false });
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      // Renderizar tarjetas
+      const container = document.getElementById('logros-container');
+      container.innerHTML = '';
+
+      const filtrados = logros.filter(l => l.nombre.toLowerCase().includes(searchFilter));
+
+      if (filtrados.length === 0) {
+        container.innerHTML = '<p style="color: var(--muted); text-align: center;">No hay logros registrados con estos filtros.</p>';
+        return;
+      }
+
+      filtrados.forEach(l => {
+        const esMioOAdmin = (l.user_id === usuarioSesion.id) || (usuarioSesion.role === 'admin');
+        container.innerHTML += `
+          <div class="achievement-card">
+            <div>
+              <span class="badge">${l.categoria}</span>
+              <h3 style="margin: 8px 0 4px 0;">${l.nombre}</h3>
+              <div class="date-tag">📅 Año: ${l.anio} ${l.fecha ? '| Fecha: ' + l.fecha : ''} | 👤 ${l.profiles ? l.profiles.nombre : 'Usuario'}</div>
+              ${l.descripcion ? `<p style="margin-top: 8px; color: #cbd5e1;">${l.descripcion}</p>` : ''}
+            </div>
+            ${esMioOAdmin ? `
+              <div>
+                <button onclick="editarLogro('${l.id}', '${l.nombre}', '${l.categoria}', ${l.anio}, '${l.fecha || ''}', '${l.descripcion || ''}')" class="btn-secondary" style="width:auto; padding:5px 10px;">✏️</button>
+                <button onclick="borrarLogro('${l.id}')" class="btn-danger" style="width:auto; padding:5px 10px;">🗑️</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+    }
+
+    // --- AÑADIR / EDITAR LOGROS ---
+    function abrirModalLogro() {
+      document.getElementById('logro-id').value = '';
+      document.getElementById('logro-nombre').value = '';
+      document.getElementById('logro-categoria').value = 'Fuerza';
+      document.getElementById('logro-anio').value = new Date().getFullYear();
+      document.getElementById('logro-fecha').value = '';
+      document.getElementById('logro-descripcion').value = '';
+      document.getElementById('modal-title').innerText = 'Añadir Logro';
+      document.getElementById('modal-logro').classList.remove('hidden');
+    }
+
+    function editarLogro(id, nombre, cat, anio, fecha, desc) {
+      document.getElementById('logro-id').value = id;
+      document.getElementById('logro-nombre').value = nombre;
+      document.getElementById('logro-categoria').value = cat;
+      document.getElementById('logro-anio').value = anio;
+      document.getElementById('logro-fecha').value = fecha;
+      document.getElementById('logro-descripcion').value = desc;
+      document.getElementById('modal-title').innerText = 'Editar Logro';
+      document.getElementById('modal-logro').classList.remove('hidden');
+    }
+
+    function cerrarModalLogro() { document.getElementById('modal-logro').classList.add('hidden'); }
+
+    async function guardarLogro() {
+      const id = document.getElementById('logro-id').value;
+      const payload = {
+        user_id: usuarioSesion.id,
+        nombre: document.getElementById('logro-nombre').value,
+        categoria: document.getElementById('logro-categoria').value,
+        anio: parseInt(document.getElementById('logro-anio').value),
+        fecha: document.getElementById('logro-fecha').value || null,
+        descripcion: document.getElementById('logro-descripcion').value
+      };
+
+      if (!payload.nombre) return alert('Pon un nombre al logro');
+
+      if (id) {
+        await supabase.from('logros').update(payload).eq('id', id);
+      } else {
+        await supabase.from('logros').insert([payload]);
+      }
+
+      cerrarModalLogro();
+      cargarLogros();
+    }
+
+    async function borrarLogro(id) {
+      if (confirm('¿Seguro que quieres borrar este logro?')) {
+        await supabase.from('logros').delete().eq('id', id);
+        cargarLogros();
+      }
+    }
+
+    // --- SISTEMA DE AMIGOS ---
+    function abrirModalAmigo() { document.getElementById('modal-amigo').classList.remove('hidden'); }
+    function cerrarModalAmigo() { document.getElementById('modal-amigo').classList.add('hidden'); }
+
+    async function agregarAmigo() {
+      const nombreAmigo = document.getElementById('amigo-nombre').value.trim();
+      
+      const { data: usuarioBusqueda } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('nombre', nombreAmigo)
+        .maybeSingle();
+
+      if (!usuarioBusqueda) {
+        alert('No se ha encontrado a ningún usuario con ese nombre.');
+        return;
+      }
+
+      const { error } = await supabase.from('amigos').insert([{
+        user_id: usuarioSesion.id,
+        amigo_id: usuarioBusqueda.id
+      }]);
+
+      if (error) {
+        alert('Ese usuario ya está en tu lista de amigos.');
+      } else {
+        alert('¡Amigo añadido con éxito!');
+        cerrarModalAmigo();
+        await cargarSelectorUsuarios();
+      }
+    }
+  </script>
+</body>
+</html>
